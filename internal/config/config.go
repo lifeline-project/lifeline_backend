@@ -1,8 +1,10 @@
 package config
 
 import (
+	"fmt"
 	"os"
 	"strconv"
+	"strings"
 
 	"github.com/joho/godotenv"
 )
@@ -12,6 +14,7 @@ type Config struct {
 	DatabaseURL           string
 	DBMaxOpenConns        int
 	DBConnTimeoutSecs     int
+	DBAutoMigrate         bool
 	JWTSecret             string
 	CloudflareR2Endpoint  string
 	CloudflareR2AccessKey string
@@ -32,6 +35,7 @@ func LoadConfig() *Config {
 		DatabaseURL:           getEnv("DATABASE_URL", ""),
 		DBMaxOpenConns:        getEnvInt("DB_MAX_OPEN_CONNS", 25),
 		DBConnTimeoutSecs:     getEnvInt("DB_CONN_TIMEOUT_SECS", 10),
+		DBAutoMigrate:         getEnvBool("DB_AUTO_MIGRATE", true),
 		JWTSecret:             getEnv("JWT_SECRET", ""),
 		CloudflareR2Endpoint:  getEnv("CLOUDFLARE_R2_ENDPOINT", ""),
 		CloudflareR2AccessKey: getEnv("CLOUDFLARE_R2_ACCESS_KEY_ID", ""),
@@ -42,6 +46,20 @@ func LoadConfig() *Config {
 		LoggerLevel:           getEnv("LOGGER_LEVEL", "info"),
 		LoggerDev:             getEnvBool("LOGGER_DEV", true),
 	}
+}
+
+func (c *Config) Validate() error {
+	missing := []string{}
+	if c.DatabaseURL == "" {
+		missing = append(missing, "DATABASE_URL")
+	}
+	if c.JWTSecret == "" {
+		missing = append(missing, "JWT_SECRET")
+	}
+	if len(missing) > 0 {
+		return fmt.Errorf("missing required config: %s", strings.Join(missing, ", "))
+	}
+	return nil
 }
 
 func getEnv(key, fallback string) string {

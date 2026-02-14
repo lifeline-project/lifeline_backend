@@ -1,55 +1,59 @@
 package database
 
-
 import (
-	"fmt"
-	"log"
-	"os"
+	"context"
+	"time"
 
-	"github.com/meetsuhagiya/lifeline-backend/internal/models"// <--- MAKE SURE THIS MATCHES YOUR go.mod NAME
+	"lifeline_backend/internal/models"
 
-	"github.com/joho/godotenv"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 )
 
-var DB *gorm.DB
+type DBConfig struct {
+	DSN             string
+	MaxOpenConns    int
+	ConnTimeoutSecs int
+	AutoMigrate     bool
+}
 
-func Connect() {
-	// 1. Load .env file
-	// We look for .env in the root directory
-	err := godotenv.Load() 
-	if err != nil {
-		log.Println("Warning: Error loading .env file, checking system environment variables")
-	}
-
-	// 2. Build Connection String
-	dsn := fmt.Sprintf(
-		"host=%s user=%s password=%s dbname=%s port=%s sslmode=%s",
-		os.Getenv("DB_HOST"),
-		os.Getenv("DB_USER"),
-		os.Getenv("DB_PASSWORD"),
-		os.Getenv("DB_NAME"),
-		os.Getenv("DB_PORT"),
-		os.Getenv("SSL_MODE"),
-	)
-
-	// 3. Connect to Postgres
-	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{
-		Logger: logger.Default.LogMode(logger.Info), // Show SQL in terminal
+func Connect(cfg DBConfig) (*gorm.DB, error) {
+	// Connect to Postgres with GORM
+	db, err := gorm.Open(postgres.Open(cfg.DSN), &gorm.Config{
+		Logger: logger.Default.LogMode(logger.Info),
 	})
-
 	if err != nil {
-		log.Fatal("Failed to connect to database. \n", err)
+		return nil, err
 	}
 
-	log.Println("✅ Connected to PostgreSQL successfully")
-	
-	// 4. Auto-Migrate (Create Tables)
-	// This magically creates the tables in DB based on your Structs
-	log.Println("Running Migrations...")
-	db.AutoMigrate(&models.User{}, &models.PharmacyProfile{}, &models.EmergencyRequest{})
+	// Get underlying *sql.DB to configure connection pool
+	sqlDB, err := db.DB()
+	if err != nil {
+		return nil, err
+	}
 
-	DB = db
+	// Set connection pool settings
+	sqlDB.SetMaxOpenConns(cfg.MaxOpenConns)
+	sqlDB.SetMaxIdleConns(cfg.MaxOpenConns / 2)
+	sqlDB.SetConnMaxLifetime(time.Hour)
+
+	// Test connection with timeout
+	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(cfg.ConnTimeoutSecs)*time.Second)
+	defer cancel()
+
+	if err := sqlDB.PingContext(ctx); err != nil {
+		sqlDB.Close()
+		return nil, err
+	}
+
+	if cfg.AutoMigrate {
+		// Auto-Migrate (Create Tables)
+		if err := db.AutoMigrate(&models.User{}, &models.PharmacyProfile{}, &models.EmergencyRequest{}); err != nil {
+			sqlDB.Close()
+			return nil, err
+		}
+	}
+
+	return db, nil
 }
