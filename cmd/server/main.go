@@ -9,9 +9,12 @@ import (
 	"syscall"
 	"time"
 
+	"lifeline_backend/internal/app"
 	"lifeline_backend/internal/config"
 	"lifeline_backend/internal/database"
 	"lifeline_backend/internal/middleware"
+	"lifeline_backend/internal/routes"
+	wshub "lifeline_backend/internal/websocket"
 	"lifeline_backend/pkg/logger"
 
 	"github.com/gin-gonic/gin"
@@ -45,7 +48,6 @@ func main() {
 		logger.Logger.Fatal("Failed to connect to database", zap.Error(err))
 	}
 	logger.Logger.Info("Database connected successfully", zap.Int("max_conns", cfg.DBMaxOpenConns))
-
 	// Get underlying *sql.DB for cleanup
 	sqlDB, err := db.DB()
 	if err != nil {
@@ -60,26 +62,22 @@ func main() {
 
 	router := gin.New()
 	router.Use(gin.Recovery())
+	router.Use(middleware.CORS())
 	router.Use(middleware.RequestLogger(logger.Logger))
 
-	router.GET("/", func(c *gin.Context) {
-		c.String(http.StatusOK, "Welcome to LifeLine Backend!")
-	})
+	// Initialize and run real-time broadcast websocket hub
+	hub := wshub.NewHub()
+	go hub.Run()
 
-	router.GET("/healthz", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{"status": "ok"})
-	})
-
-	router.GET("/readyz", func(c *gin.Context) {
-		ctx, cancel := context.WithTimeout(c.Request.Context(), 2*time.Second)
-		defer cancel()
-
-		if err := sqlDB.PingContext(ctx); err != nil {
-			c.JSON(http.StatusServiceUnavailable, gin.H{"status": "not_ready"})
-			return
-		}
-		c.JSON(http.StatusOK, gin.H{"status": "ready"})
-	})
+	// Build dependency container and register ALL routes (system + versioned API)
+	application := &app.App{
+		DB:     db,
+		Logger: logger.Logger,
+		Router: router,
+		Config: cfg,
+		Hub:    hub,
+	}
+	routes.Register(application)
 
 	server := &http.Server{
 		Addr:    ":" + cfg.Port,

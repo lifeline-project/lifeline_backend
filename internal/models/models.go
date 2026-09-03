@@ -33,6 +33,20 @@ type EmergencyRequest struct {
 	PrescriptionImageURL  string    `json:"prescription_image_url"`
 	Note                  string    `json:"note"`
 	Status                string    `json:"status"` // 'OPEN', 'FULFILLED', 'CANCELLED'
+	RequestLatitude       float64   `json:"request_latitude" gorm:"type:numeric"`
+	RequestLongitude      float64   `json:"request_longitude" gorm:"type:numeric"`
 	FulfilledByPharmacyID *uint     `json:"fulfilled_by_pharmacy_id"` 
 	CreatedAt             time.Time `json:"created_at"`
+}
+
+// PharmacyResponse - Responses from pharmacies
+type PharmacyResponse struct {
+	ID                  uint      `json:"id" gorm:"primaryKey"`
+	PharmacyID          uint      `json:"pharmacy_id"`
+	RequestID           uint      `json:"request_id"`
+	Availability        string    `json:"availability"` // 'YES', 'NO'
+	Price               float64   `json:"price" gorm:"type:numeric"`
+	EstimatedPickupTime string    `json:"estimated_pickup_time"`
+	Notes               string    `json:"notes"`
+	RespondedAt         time.Time `json:"responded_at"`
 }

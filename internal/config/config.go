@@ -27,8 +27,11 @@ type Config struct {
 }
 
 func LoadConfig() *Config {
-	// Load .env file from configs directory
+	// Attempt to load .env from root directory, configs directory, or parent paths
+	_ = godotenv.Load(".env")
 	_ = godotenv.Load("configs/.env")
+	_ = godotenv.Load("../.env")
+	_ = godotenv.Load("../../configs/.env")
 
 	return &Config{
 		Port:                  getEnv("PORT", "8080"),

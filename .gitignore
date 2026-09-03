@@ -24,9 +24,19 @@ profile.cov
 go.work
 go.work.sum
 
-# env file
+# Environment files
 .env
+.env.*
+*.env
+configs/.env
+**/.env
+!*.env.example
+!.env.example
+!configs/.env.example
 
 # Editor/IDE
 # .idea/
-# .vscode/
+.vscode/
+
+#internal documentation
+docs/
